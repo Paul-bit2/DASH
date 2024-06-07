@@ -1,97 +1,153 @@
 import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
 
+# Configurar el layout de la página a "wide"
 st.set_page_config(layout="wide")
 
-# Función para cargar datos
-@st.cache_data
-def cargar_datos():
-    df_dashboardruido = pd.read_csv('Dashboardruido.csv')
-    df_dashboardnoruido = pd.read_csv('Dashboardnoruido.csv')
-    df_dashboardgolpe = pd.read_csv('Dashboardgolpe.csv')
-    df_anomaly = pd.read_csv('Dashboardanomaly.csv')
-    return df_dashboardruido, df_dashboardnoruido, df_dashboardgolpe, df_anomaly
+# Función para el login
+def check_login(username, password):
+    return username == "prueba" and password == "prueba123"
 
-# Cargar los datos
-df_dashboardruido, df_dashboardnoruido, df_dashboardgolpe, df_anomaly = cargar_datos()
+# Verificar si el usuario ha iniciado sesión
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
 
-# Convertir las columnas 'created_at' a datetime
-for df in [df_dashboardruido, df_dashboardnoruido, df_dashboardgolpe, df_anomaly]:
-    df['created_at'] = pd.to_datetime(df['created_at'])
+# Página de Login
+def login_page():
+    st.subheader("Iniciar Sesión")
+    username = st.text_input("Usuario")
+    password = st.text_input("Contraseña", type="password")
+    if st.button("Login"):
+        if check_login(username, password):
+            st.success("Login exitoso")
+            st.session_state.logged_in = True
+            st.experimental_rerun()
+        else:
+            st.error("Usuario o contraseña incorrectos")
 
-# Crear gráficas con Plotly
-def crear_grafica(df, x, y, title, height=300, color='#bd1408'):
-    fig = px.line(df, x=x, y=y, title=title, line_shape='linear', render_mode='svg', line_dash_sequence=['solid'])
-    fig.update_traces(line=dict(color=color))
-    fig.update_layout(margin=dict(l=20, r=20, t=20, b=20), autosize=True, height=height)
-    fig.update_yaxes(title_text='Amperaje')
-    return fig
+# Página de Bancos
+def bancos_page():
+    st.title('Sistema de Videovigilancia para Bancos')
 
-# Selector de fecha para anomalías y lógica asociada
-fecha_seleccionada = st.sidebar.date_input("Seleccionar Fecha para Anomalías", pd.to_datetime('2023-07-13').date())
-unique_dates = df_anomaly['created_at'].dt.date.unique()
-fig_anomalies = None
-if fecha_seleccionada in unique_dates:
-    current_day_data = df_anomaly[df_anomaly['created_at'].dt.date == fecha_seleccionada]
-    first_anomaly = current_day_data[current_day_data['anomaly'] == -1].iloc[0]
-    index_of_anomaly = current_day_data.index.get_loc(first_anomaly.name)
-    start_index = max(0, index_of_anomaly - 15000)
-    end_index = min(current_day_data.shape[0], index_of_anomaly + 15000)
-    snippet = current_day_data.iloc[start_index:end_index]
+    # Sección de visualización de cámaras y alertas
+    st.subheader('Cámaras en vivo y Alertas de Seguridad')
+    col1, col2, col3 = st.columns([1, 1, 1.5])
+    with col1:
+        st.image("imagen2.jpg", caption="Cámara 1")
+    with col2:
+        st.image("imagen1.png", caption="Cámara 2")
+    with col3:
+        st.subheader('Alertas de Seguridad')
+        alertas = [
+            {"hora": "10:15 AM", "detalle": "Comportamiento sospechoso detectado en Cámara 1"},
+            {"hora": "10:30 AM", "detalle": "Violación de distancia en Cámara 1"},
+            {"hora": "11:00 AM", "detalle": "Comportamiento sospechoso detectado en Cámara 2"},
+        ]
 
-    fig_anomalies = go.Figure()
-    fig_anomalies.add_trace(go.Scatter(x=snippet['created_at'], y=snippet['l1'], mode='lines', name='L1', line=dict(color='black')))
-    anomalies = snippet[snippet['anomaly'] == -1]
-    fig_anomalies.add_trace(go.Scatter(x=anomalies['created_at'], y=anomalies['l1'], mode='markers', marker_color='red', name='Anomalía'))
-    fig_anomalies.update_layout(title=f'Detección de Anomalías para el día {fecha_seleccionada}', xaxis_title='Tiempo', yaxis_title='Amperaje', height=300)
+        for alerta in alertas:
+            st.warning(f"{alerta['hora']}: {alerta['detalle']}")
 
-estado = st.sidebar.selectbox('Seleccionar Estado', [0, 1], key='estado_selector')
-df_filtrado = df_dashboardgolpe[df_dashboardgolpe['estado'] == estado]
+    # Opciones de acciones
+    st.subheader('Acciones Disponibles')
+    col4, col5, col6 = st.columns(3)
+    with col4:
+        st.button('Revisar Grabaciones')
+    with col5:
+        st.button('Alertar a Seguridad')
+    with col6:
+        st.button('Llamar a Autoridades')
 
-# Layout de Streamlit
-st.markdown('<h1 style="text-align: center; font-family: \'Space Grotesk\'; font-size: 40px;margin-top: -80px; text-transform: uppercase;">Dashboard Detección de anomalías</h1>', unsafe_allow_html=True)
-col1, col2, col3 = st.columns([2,2,2])
+    # Sección de registro de incidentes
+    st.subheader('Registro de Incidentes')
+    st.write("Historial de todos los incidentes detectados y las acciones tomadas.")
 
-# Gráfica Ruido
-with col1:
-    fig_ruido = crear_grafica(df_dashboardruido, 'created_at', 'l1', 'Amperaje a través del tiempo (Ruido)', color='#bd1408')
-    st.plotly_chart(fig_ruido, use_container_width=True)
+    # Ejemplo de registro de incidentes
+    incidentes = [
+        {"hora": "10:15 AM", "detalle": "Comportamiento sospechoso en Cámara 1", "acción": "Alertado a Seguridad"},
+        {"hora": "10:30 AM", "detalle": "Violación de distancia en Cámara 2", "acción": "Ninguna"},
+        {"hora": "11:00 AM", "detalle": "Comportamiento sospechoso en Cámara 3", "acción": "Llamado a Autoridades"},
+    ]
 
-# Gráfica No Ruido
-with col2:
-    fig_noruido = crear_grafica(df_dashboardnoruido, 'created_at', 'l1', 'Amperaje a través del tiempo (No Ruido)', color='black')
-    st.plotly_chart(fig_noruido, use_container_width=True)
+    for incidente in incidentes:
+        st.info(f"{incidente['hora']}: {incidente['detalle']} - Acción: {incidente['acción']}")
 
-# Gráfica K-means (con control para estado)
-with col3:
-    fig_kmeans = crear_grafica(df_filtrado, 'created_at', 'l1', f'K-means Separación: Estado {estado}', color='#bd1408')
-    st.plotly_chart(fig_kmeans, use_container_width=True)
+    # Opción para descargar el historial de incidentes
+    st.sidebar.subheader("Descargar Historial")
+    if st.sidebar.button("Descargar"):
+        # Generar el archivo de historial de incidentes
+        import pandas as pd
+        df = pd.DataFrame(incidentes)
+        df.to_csv("historial_incidentes.csv", index=False)
+        st.sidebar.download_button(
+            label="Descargar historial de incidentes",
+            data=open("historial_incidentes.csv", "rb"),
+            file_name="historial_incidentes.csv",
+            mime="text/csv",
+        )
 
-col1, col2 = st.columns(2)
+# Página de Plantas
+def plantas_page():
+    st.title('Sistema de Videovigilancia para Plantas')
 
-# Gráfica en la primera columna
-with col2:
-    st.markdown("""
-        # ANOMALÍAS CONTADAS
+    # Sección de visualización de cámaras y alertas
+    st.subheader('Cámaras en vivo y Alertas de Seguridad')
+    col1, col2, col3 = st.columns([1, 1, 1.5])
+    with col1:
+        st.image("imagen4.png", caption="Cámara 1")
+    with col2:
+        st.image("imagen5.png", caption="Cámara 2")
+    with col3:
+        st.subheader('Alertas de Seguridad')
+        alertas = [
+            {"hora": "11:30 AM", "detalle": "Trabajador no tiene el equipo en el área de trabajo"},
+            {"hora": "11:45 AM", "detalle": "Violación de distancia sin equipo de seguridad"},
+            {"hora": "12:30 AM", "detalle": "Colaborador en área peligrosa sin lentes de seguridad"},
+        ]
 
-        | FECHA       | NÚMERO DE ANOMALÍAS |
-        | ----------- | ------------------- |
-        | 2022-10-13  | 1,129,116           |
-        | 2023-06-02  | 980,721             |
-        | 2023-07-13  | 558,945             |
-    """)
+        for alerta in alertas:
+            st.warning(f"{alerta['hora']}: {alerta['detalle']}")
 
-# Puedes colocar más contenido o gráficas en la segunda columna si lo deseas
-with col1:
-    if fig_anomalies:
-        st.plotly_chart(fig_anomalies, use_container_width=True)
-    else:
-        st.write("No hay datos de anomalías para esta fecha.")
+    # Opciones de acciones
+    st.subheader('Acciones Disponibles')
+    col4, col5, col6 = st.columns(3)
+    with col4:
+        st.button('Revisar Grabaciones')
+    with col5:
+        st.button('Alertar a Seguridad')
+    with col6:
+        st.button('Botón pendiente')
 
+    # Sección de registro de incidentes
+    st.subheader('Registro de Incidentes')
+    st.write("Historial de todos los incidentes detectados y las acciones tomadas.")
 
+    # Ejemplo de registro de incidentes
+    incidentes = [
+            {"hora": "11:30 AM", "detalle": "Trabajador no tiene el equipo en el área de trabajo"},
+            {"hora": "11:45 AM", "detalle": "Violación de distancia sin equipo de seguridad"},
+            {"hora": "12:30 AM", "detalle": "Colaborador en área peligrosa sin lentes de seguridad"},
+        ]
 
+    # Opción para descargar el historial de incidentes
+    st.sidebar.subheader("Descargar Historial")
+    if st.sidebar.button("Descargar"):
+        # Generar el archivo de historial de incidentes
+        import pandas as pd
+        df = pd.DataFrame(incidentes)
+        df.to_csv("historial_incidentes.csv", index=False)
+        st.sidebar.download_button(
+            label="Descargar historial de incidentes",
+            data=open("historial_incidentes.csv", "rb"),
+            file_name="historial_incidentes.csv",
+            mime="text/csv",
+        )
 
-
-
+# Menu lateral
+if st.session_state.logged_in:
+    st.sidebar.title("Menú")
+    menu = st.sidebar.radio("Seleccione una opción", ["Bancos", "Plantas"])
+    if menu == "Bancos":
+        bancos_page()
+    elif menu == "Plantas":
+        plantas_page()
+else:
+    login_page()
