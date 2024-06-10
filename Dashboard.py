@@ -6,35 +6,10 @@ import matplotlib.pyplot as plt
 # Configurar el layout de la página a "wide"
 st.set_page_config(page_title="Sistema de Videovigilancia", layout="wide")
 
-
-# Función para el login
-def check_login(username, password):
-    return username == "prueba" and password == "prueba123"
-
-
-# Verificar si el usuario ha iniciado sesión
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-
-
-# Página de Login
-def login_page():
-    st.markdown("<h1 style='text-align: center;'>Super Vision</h1>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        username = st.text_input("Usuario")
-        password = st.text_input("Contraseña", type="password")
-        if st.button("Login"):
-            if check_login(username, password):
-                st.success("Login exitoso")
-                st.session_state.logged_in = True
-                st.experimental_rerun()
-            else:
-                st.error("Usuario o contraseña incorrectos")
-
-
 # Página de Bancos
 def bancos_page():
+    # Título centrado
+    st.markdown("<h1 style='text-align: center;'>Super Vision</h1>", unsafe_allow_html=True)
     # Sección de visualización de cámaras y alertas
     st.subheader('Cámaras en vivo y Alertas de Seguridad')
     col1, col2, col3 = st.columns([1, 1, 1.5])
@@ -89,7 +64,6 @@ def bancos_page():
             file_name="historial_incidentes.csv",
             mime="text/csv",
         )
-
 
 # Página de Plantas
 def plantas_page():
@@ -153,7 +127,6 @@ def plantas_page():
             mime="text/csv",
         )
 
-
 # Página de Estadísticas
 def estadisticas_page():
     # Título centrado
@@ -190,26 +163,22 @@ def estadisticas_page():
     ax.set_ylabel('Número de incidentes')
     st.pyplot(fig)
 
-
 # Menu lateral
-if st.session_state.logged_in:
-    with st.sidebar:
-        selected_menu = option_menu("Menú", ["Bancos", "Plantas", "Estadísticas"],
-                                    icons=['building', 'factory', 'bar-chart'],
-                                    menu_icon="cast", default_index=0,
-                                    styles={
-                                        "container": {"padding": "0!important", "background-color": "#fafafa"},
-                                        "icon": {"color": "orange", "font-size": "25px"},
-                                        "nav-link": {"font-size": "25px", "text-align": "left", "margin": "0px",
-                                                     "--hover-color": "#eee"},
-                                        "nav-link-selected": {"background-color": "#04297a"},
-                                    }
-                                    )
-    if selected_menu == "Bancos":
-        bancos_page()
-    elif selected_menu == "Plantas":
-        plantas_page()
-    elif selected_menu == "Estadísticas":
-        estadisticas_page()
-else:
-    login_page()
+with st.sidebar:
+    selected_menu = option_menu("Menú", ["Bancos", "Plantas", "Estadísticas"],
+                                icons=['building', 'factory', 'bar-chart'],
+                                menu_icon="cast", default_index=0,
+                                styles={
+                                    "container": {"padding": "0!important", "background-color": "#fafafa"},
+                                    "icon": {"color": "orange", "font-size": "25px"},
+                                    "nav-link": {"font-size": "25px", "text-align": "left", "margin": "0px",
+                                                 "--hover-color": "#eee"},
+                                    "nav-link-selected": {"background-color": "#04297a"},
+                                }
+                                )
+if selected_menu == "Bancos":
+    bancos_page()
+elif selected_menu == "Plantas":
+    plantas_page()
+elif selected_menu == "Estadísticas":
+    estadisticas_page()
