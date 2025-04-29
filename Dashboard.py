@@ -19,7 +19,7 @@ imagen = Image.open("rocaviva.png")
 # Crear una columna para imagen y título alineados
 col1, col2 = st.columns([1, 5])
 with col1:
-    st.image(imagen, width=80)
+    st.image(imagen, width=400)
 with col2:
     st.markdown("<h1 style='margin-top: 10px;'>Calculadora</h1>", unsafe_allow_html=True)
 
