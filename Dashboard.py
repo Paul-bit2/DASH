@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from PIL import Image
 
 # Cargar archivo Excel
 archivo = 'calculadora.xlsx'
@@ -12,7 +13,29 @@ def cargar_datos():
 
 data_df = cargar_datos()
 
-st.title("Calculadora de Ingredientes")
+# Cargar imagen
+imagen = Image.open("rocaviva.png")
+
+# Crear una columna para imagen y título alineados
+col1, col2 = st.columns([1, 5])
+with col1:
+    st.image(imagen, width=80)
+with col2:
+    st.markdown("<h1 style='margin-top: 10px;'>Calculadora</h1>", unsafe_allow_html=True)
+
+st.markdown("""
+<style>
+    .resultado-tabla {
+        background-color: #f9f9f9;
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        padding: 10px;
+    }
+    .stDataFrame {
+        background-color: #ffffff;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Obtener lista única de productos
 productos = data_df['Producto'].dropna().unique()
@@ -31,9 +54,20 @@ if st.button("Calcular"):
         factor = litros / 200.0
 
         filtrado = filtrado[['Ingrediente', 'Cantidad (L)']].copy()
-        filtrado['Cantidad Necesaria (L)'] = filtrado['Cantidad (L)'] * factor
+        filtrado['Cantidad Necesaria'] = filtrado['Cantidad (L)'] * factor
         filtrado = filtrado.drop(columns=['Cantidad (L)'])
 
-        st.success("Cálculo completado. Resultados:")
-        st.dataframe(filtrado, use_container_width=True)
+        # Convertir a mililitros si es menor a 1 litro
+        def formatear_cantidad(x):
+            if x < 1:
+                return f"{round(x * 1000)} ml"
+            else:
+                return f"{round(x, 2)} L"
 
+        filtrado['Cantidad Necesaria'] = filtrado['Cantidad Necesaria'].apply(formatear_cantidad)
+
+        st.success("✅ Cálculo completado. Resultados:")
+        with st.container():
+            st.markdown('<div class="resultado-tabla">', unsafe_allow_html=True)
+            st.dataframe(filtrado, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
