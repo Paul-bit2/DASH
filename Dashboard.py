@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import gspread
 from google.oauth2 import service_account
 from datetime import datetime
@@ -40,7 +41,8 @@ def load_df(ws_name: str) -> pd.DataFrame:
         st.error(f"❌ La pestaña '{ws_name}' está vacía o sin datos.")
         st.stop()
     header, rows = values[0], values[1:]
-    return pd.DataFrame(rows, columns=header)
+    df = pd.DataFrame(rows, columns=header)
+    return df
 
 def append_row(ws_name: str, row: list):
     try:
@@ -89,26 +91,31 @@ def page_calculadora():
     linea = st.selectbox("Línea de productos", ["Roca Viva (RV)", "FZClean (FZ)"])
     ws_recetas = "Recetas RV" if linea.endswith("RV") else "Recetas FZ"
     df_rec = load_df(ws_recetas)
-    producto = st.selectbox("Producto", df_rec["Producto"].unique())
+    # rellenar Producto para cada ingrediente
+    df_rec["_Product"] = df_rec["Producto"].replace("", np.nan).ffill()
+    producto = st.selectbox("Producto", df_rec["_Product"].unique())
     litros = st.number_input("Litros a preparar", min_value=1.0, step=1.0, value=1.0)
     if st.button("Calcular ingredientes"):
-        receta = df_rec[df_rec["Producto"] == producto].copy()
-        factor = litros / float(receta["Cantidad"].iloc[0])
-        receta["Cantidad Necesaria (L)"] = receta["Cantidad (L)"].astype(float) * factor
-        st.dataframe(receta[["Ingrediente", "Cantidad Necesaria (L)"]])
+        sel = df_rec[df_rec["_Product"] == producto].copy()
+        # usamos la cantidad base de la primera fila en 'Cantidad (L)'
+        base = float(sel["Cantidad (L)"].iloc[0])
+        factor = litros / base
+        sel["Cantidad Necesaria (L)"] = sel["Cantidad (L)"].astype(float) * factor
+        st.dataframe(sel[["Ingrediente", "Cantidad Necesaria (L)"]])
 
 def page_ventas():
     st.header("💰 Registrar Venta")
     precios_df = load_df("Precio Venta")
     costos_df  = load_df("Costos")
     producto = st.selectbox("Producto", precios_df["Producto"].unique())
-    pres = list(set(precios_df.columns) & set(costos_df.columns) - {"Producto"})
+    # intersección de presentaciones
+    pres = [c for c in precios_df.columns if c != "Producto" and c in costos_df.columns]
     presentacion = st.selectbox("Presentación", pres)
     cantidad = st.number_input("Cantidad", min_value=1.0, step=1.0, value=1.0)
     incluye_iva  = st.checkbox("¿Precio incluye IVA?", value=True)
     pago_tarjeta = st.checkbox("¿Pago con tarjeta?", value=False)
-    precio_venta = float(prices := precios_df.loc[precios_df["Producto"] == producto, presentacion].iloc[0])
-    precio_costo = float(costs := costos_df.loc[costos_df["Producto"] == producto, presentacion].iloc[0])
+    precio_venta = float(precios_df.loc[precios_df["Producto"]==producto, presentacion].iloc[0])
+    precio_costo = float(costos_df.loc[costos_df["Producto"]==producto, presentacion].iloc[0])
     st.markdown(f"**Venta:** {precio_venta}   —   **Costo:** {precio_costo}")
     if st.button("Registrar"):
         registrar_venta(producto, presentacion, cantidad,
@@ -117,13 +124,11 @@ def page_ventas():
 
 def page_inventario():
     st.header("📦 Inventario")
-    df = load_df("Inventario")
-    st.dataframe(df)
+    st.dataframe(load_df("Inventario"))
 
 def page_egresos():
     st.header("💸 Egresos")
-    df = load_df("Egresos")
-    st.dataframe(df)
+    st.dataframe(load_df("Egresos"))
 
 # ——————————————————————————————————————
 # 5) Menú principal
@@ -144,10 +149,5 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-if __name__ == "__main__":
-    main()
-
 
 
