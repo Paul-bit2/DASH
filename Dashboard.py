@@ -1,97 +1,128 @@
 import streamlit as st
+import pandas as pd
 import gspread
 from google.oauth2 import service_account
-import json
+from datetime import datetime
 
-# Asegúrate de que el formato de tus secretos sea un string JSON válido
-creds = st.secrets["google_sheets_credentials"]
+# ——————————————————————————————————————
+# 1) Autenticación con Google Sheets
+# ——————————————————————————————————————
+# st.secrets["google_sheets_credentials"] ya es un dict, así que lo pasamos directamente:
+creds_info = st.secrets["google_sheets_credentials"]
+credentials = service_account.Credentials.from_service_account_info(
+    creds_info,
+    scopes=["https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive"]
+)
+gc = gspread.authorize(credentials)
 
-# Si el secreto es un string, lo convierte en un diccionario
-creds_dict = json.loads(creds)
 
-# Autenticación con Google Sheets usando las credenciales del secreto
-credentials = service_account.Credentials.from_service_account_info(creds_dict)
-client = gspread.authorize(credentials)
+# ——————————————————————————————————————
+# 2) Funciones de acceso a datos
+# ——————————————————————————————————————
+def load_df(sheet_name: str, ws_name: str) -> pd.DataFrame:
+    """Carga toda la hoja ws_name de la spreadsheet sheet_name."""
+    sh = gc.open(sheet_name)
+    ws = sh.worksheet(ws_name)
+    return pd.DataFrame(ws.get_all_records())
 
-# Conectar con la API de Google Sheets
-client = gspread.authorize(creds)
+def append_row(sheet_name: str, ws_name: str, row: list):
+    """Agrega una fila al final de la hoja ws_name."""
+    sh = gc.open(sheet_name)
+    ws = sh.worksheet(ws_name)
+    ws.append_row(row)
 
-# Obtener la hoja de trabajo
-sheet_name = 'ROCA VIVA'  # El nombre de tu hoja de Google Sheets
-worksheet = client.open(sheet_name).sheet1
 
-# Función para obtener datos de la hoja de Google Sheets
-def get_data_from_sheet():
-    data = worksheet.get_all_records()
-    return pd.DataFrame(data)
+# ——————————————————————————————————————
+# 3) Lógica de cálculo
+# ——————————————————————————————————————
+def calcular_ganancia(precio_venta, precio_costo, cantidad, incluye_iva, pago_tarjeta):
+    total_venta = round(precio_venta * cantidad, 4)
+    total_costo = round(precio_costo * cantidad, 4)
+    # SAT (16% del total si incluye IVA)
+    sat = round(total_venta * 0.16, 4) if incluye_iva else 0
+    # Comisión tarjeta (3.6% + IVA sobre la comisión)
+    comision = round(total_venta * 0.036 * 1.16, 4) if pago_tarjeta else 0
+    ganancia = round(total_venta - total_costo - sat - comision, 4)
+    # Distribución: empresa 20%, iglesia 0%, Reyna 5%, Paul resto
+    reserva = round(ganancia * 0.20, 4)
+    iglesia = 0
+    reyna = round(ganancia * 0.05, 4)
+    paul = round(ganancia - reserva - iglesia - reyna, 4)
+    return total_venta, total_costo, sat, comision, ganancia, reserva, iglesia, reyna, paul
 
-# Función para enviar los datos calculados de producción
-def update_data_in_sheet(sheet_name, row, data):
-    worksheet = client.open(sheet_name).sheet1
-    worksheet.insert_row(data, row)  # Inserta los datos en una nueva fila
 
-# Interfaz de usuario
+# ——————————————————————————————————————
+# 4) Registro de ventas
+# ——————————————————————————————————————
+def registrar_venta(sheet_name, fecha, producto, presentacion, cantidad,
+                    precio_venta, precio_costo, incluye_iva, pago_tarjeta):
+    tv, tc, sat, com, gan, res, igl, rey, pau = calcular_ganancia(
+        precio_venta, precio_costo, cantidad, incluye_iva, pago_tarjeta
+    )
+    fila = [
+        fecha, producto, presentacion, incluye_iva, pago_tarjeta,
+        cantidad, precio_venta, precio_costo, tv, tc, gan,
+        res, igl, rey, pau, sat
+    ]
+    append_row(sheet_name, "Ventas", fila)
+    st.success("✅ Venta registrada en Google Sheets")
+
+
+# ——————————————————————————————————————
+# 5) App de Streamlit
+# ——————————————————————————————————————
 def main():
-    st.title("Cálculo de Ventas y Producción")
-    st.subheader("Calculadora de ventas y distribución")
+    st.title("📊 Sistema de Ventas – ROCA VIVA / FZClean")
 
-    # Cargar los datos de la hoja de Google Sheets
-    df = get_data_from_sheet()
+    # 5.1 Elige línea
+    linea = st.selectbox("Línea de productos", ["Roca Viva (RV)", "FZClean (FZ)"])
 
-    # Mostrar los datos en Streamlit
-    st.write("Datos de la hoja de Google Sheets:")
-    st.dataframe(df)
+    # 5.2 Carga precios y costos
+    SHEET = "ROCA VIVA"  # nombre de tu Google Sheets
+    precios_df = load_df(SHEET, "Precio Venta")
+    costos_df = load_df(SHEET, "Costos")
 
-    # Selección de producto y otros campos
-    product = st.selectbox('Selecciona el producto', df['Producto'].unique())
-    quantity = st.number_input('Cantidad de producción', min_value=1, step=1)
-    iva_inclusive = st.checkbox('¿Incluye IVA?')
-    payment_method = st.radio('Método de pago', ['Efectivo', 'Tarjeta'])
+    # 5.3 Selección de producto y presentación
+    df_linea = precios_df  # si quisieras filtrar por RV/FZ, lo harías aquí
+    producto = st.selectbox("Producto", df_linea["Producto"].unique())
+    presentaciones = [c for c in df_linea.columns if c != "Producto"]
+    presentacion = st.selectbox("Presentación", presentaciones)
 
-    # Botón de calcular
-    if st.button('Calcular'):
-        calculate_sales_and_distribution(product, quantity, iva_inclusive, payment_method)
+    # 5.4 Parámetros de la venta
+    cantidad = st.number_input("Cantidad", min_value=1.0, step=1.0, value=1.0)
+    incluye_iva = st.checkbox("¿Precio incluye IVA?", value=True)
+    pago_tarjeta = st.checkbox("¿Pago con tarjeta?", value=False)
 
-# Cálculos de venta y distribución
-def calculate_sales_and_distribution(product, quantity, iva_inclusive, payment_method):
-    # Obtener el precio del producto seleccionado
-    price = df[df['Producto'] == product]['Granel'].values[0]  # Asumiendo que usamos el precio "Granel"
+    # 5.5 Obtén precios desde los DataFrames
+    precio_venta = float(
+        df_linea.loc[df_linea["Producto"] == producto, presentacion].iloc[0]
+    )
+    precio_costo = float(
+        costos_df.loc[costos_df["Producto"] == producto, presentacion].iloc[0]
+    )
 
-    # Si el precio incluye IVA, lo restamos para calcular el precio sin IVA
-    if iva_inclusive:
-        price_without_iva = price / 1.16
-    else:
-        price_without_iva = price
+    # 5.6 Mostrar resumen antes de registrar
+    st.markdown(f"**Precio venta:** {precio_venta} | **Costo unitario:** {precio_costo}")
 
-    # Calcular total de la venta
-    total_sale = price_without_iva * quantity
+    if st.button("🖊️ Registrar venta"):
+        fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        registrar_venta(
+            SHEET, fecha, producto, presentacion,
+            cantidad, precio_venta, precio_costo,
+            incluye_iva, pago_tarjeta
+        )
 
-    # Cálculos de ganancias y distribución
-    total_profit = total_sale - price * quantity
-    company_reserve = total_profit * 0.20  # 20% para la empresa
-    church = 0  # 0% para la iglesia
-    reyna = total_profit * 0.05  # 5% para Reyna
-    paul = total_profit - company_reserve - church - reyna  # El resto es para Paul
+    # 5.7 Panel lateral: inventario y egresos
+    st.sidebar.title("📦 Inventario")
+    inv_df = load_df(SHEET, "Inventario")
+    st.sidebar.dataframe(inv_df)
 
-    # Descuento de tarjeta
-    if payment_method == "Tarjeta":
-        transaction_fee = total_sale * 0.036 * 1.16  # 3.6% más IVA
-        total_sale -= transaction_fee
+    st.sidebar.title("💸 Egresos")
+    eg_df = load_df(SHEET, "Egresos")
+    st.sidebar.dataframe(eg_df)
 
-    # Calcular SAT
-    if iva_inclusive:
-        sat = total_sale * 0.16  # El 16% es para SAT si incluye IVA
-    else:
-        sat = 0
 
-    # Mostrar resultados
-    st.write(f"Total de venta: {total_sale}")
-    st.write(f"Ganancia: {total_profit}")
-    st.write(f"Reserva de empresa (20%): {company_reserve}")
-    st.write(f"Reyna (5%): {reyna}")
-    st.write(f"Paul: {paul}")
-    st.write(f"SAT (16% si incluye IVA): {sat}")
-    st.write(f"Total con impuestos: {total_sale - sat}")
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
+
