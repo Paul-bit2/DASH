@@ -28,58 +28,45 @@ def list_worksheets():
     return [ws.title for ws in sh.worksheets()]
 
 def load_df(ws_name: str) -> pd.DataFrame:
-    """Carga ws_name en un DataFrame usando get_all_values()."""
     try:
         sh = gc.open_by_key(SPREADSHEET_ID)
         ws = sh.worksheet(ws_name)
+        values = ws.get_all_values()
     except GSpreadException:
-        st.error(
-            f"❌ No encontré la pestaña '{ws_name}'.\n"
-            f"Las pestañas disponibles son:\n  • " + "\n  • ".join(list_worksheets())
-        )
+        st.error(f"❌ No pude abrir '{ws_name}'. Hojas disponibles:\n  • "
+                 + "\n  • ".join(list_worksheets()))
         st.stop()
-
-    values = ws.get_all_values()
-    if not values or len(values) < 1:
-        st.error(f"❌ La pestaña '{ws_name}' está vacía.")
+    if not values or len(values) < 2:
+        st.error(f"❌ La pestaña '{ws_name}' está vacía o sin datos.")
         st.stop()
-
-    header = values[0]
-    rows   = values[1:]
-    df = pd.DataFrame(rows, columns=header)
-    return df
+    header, rows = values[0], values[1:]
+    return pd.DataFrame(rows, columns=header)
 
 def append_row(ws_name: str, row: list):
-    """Añade una fila al final de ws_name."""
     try:
         sh = gc.open_by_key(SPREADSHEET_ID)
         ws = sh.worksheet(ws_name)
+        ws.append_row(row, value_input_option="USER_ENTERED")
     except GSpreadException:
-        st.error(
-            f"❌ No encontré la pestaña '{ws_name}' para escribir.\n"
-            f"Las pestañas disponibles son:\n  • " + "\n  • ".join(list_worksheets())
-        )
+        st.error(f"❌ No pude escribir en '{ws_name}'. Hojas disponibles:\n  • "
+                 + "\n  • ".join(list_worksheets()))
         st.stop()
-    ws.append_row(row, value_input_option="USER_ENTERED")
 
 # ——————————————————————————————————————
-# 3) Lógica de cálculo de venta y distribución
+# 3) Lógica de negocio
 # ——————————————————————————————————————
 def calcular_ganancia(precio_venta, precio_costo, cantidad, incluye_iva, pago_tarjeta):
-    total_venta = round(precio_venta * cantidad, 4)
-    total_costo = round(precio_costo  * cantidad, 4)
-    sat         = round(total_venta * 0.16, 4) if incluye_iva else 0
-    comision    = round(total_venta * 0.036 * 1.16, 4) if pago_tarjeta else 0
-    ganancia    = round(total_venta - total_costo - sat - comision, 4)
-    reserva     = round(ganancia * 0.20, 4)
-    iglesia     = 0
-    reyna       = round(ganancia * 0.05, 4)
-    paul        = round(ganancia - reserva - iglesia - reyna, 4)
-    return total_venta, total_costo, sat, comision, ganancia, reserva, iglesia, reyna, paul
+    tv = round(precio_venta * cantidad, 4)
+    tc = round(precio_costo  * cantidad, 4)
+    sat = round(tv * 0.16, 4) if incluye_iva else 0
+    com = round(tv * 0.036 * 1.16, 4) if pago_tarjeta else 0
+    gan = round(tv - tc - sat - com, 4)
+    res = round(gan * 0.20, 4)
+    igl = 0
+    rey = round(gan * 0.05, 4)
+    pau = round(gan - res - igl - rey, 4)
+    return tv, tc, sat, com, gan, res, igl, rey, pau
 
-# ——————————————————————————————————————
-# 4) Registrar venta en la pestaña "Ventas"
-# ——————————————————————————————————————
 def registrar_venta(producto, presentacion, cantidad,
                     precio_venta, precio_costo, incluye_iva, pago_tarjeta):
     fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -95,47 +82,68 @@ def registrar_venta(producto, presentacion, cantidad,
     st.success("✅ Venta registrada en Google Sheets")
 
 # ——————————————————————————————————————
-# 5) App principal de Streamlit
+# 4) Páginas de la app
 # ——————————————————————————————————————
-def main():
-    st.title("📊 Sistema de Ventas – ROCA VIVA / FZClean")
-
-    # 5.1 Línea de productos
+def page_calculadora():
+    st.header("🧪 Calculadora de Ingredientes")
     linea = st.selectbox("Línea de productos", ["Roca Viva (RV)", "FZClean (FZ)"])
+    ws_recetas = "Recetas RV" if linea.endswith("RV") else "Recetas FZ"
+    df_rec = load_df(ws_recetas)
+    producto = st.selectbox("Producto", df_rec["Producto"].unique())
+    litros = st.number_input("Litros a preparar", min_value=1.0, step=1.0, value=1.0)
+    if st.button("Calcular ingredientes"):
+        receta = df_rec[df_rec["Producto"] == producto].copy()
+        factor = litros / float(receta["Cantidad"].iloc[0])
+        receta["Cantidad Necesaria (L)"] = receta["Cantidad (L)"].astype(float) * factor
+        st.dataframe(receta[["Ingrediente", "Cantidad Necesaria (L)"]])
 
-    # 5.2 Carga precios y costos
+def page_ventas():
+    st.header("💰 Registrar Venta")
     precios_df = load_df("Precio Venta")
     costos_df  = load_df("Costos")
-
-    # 5.3 Selección de producto y presentación
-    producto      = st.selectbox("Producto", precios_df["Producto"].unique())
-    presentaciones = [c for c in precios_df.columns if c != "Producto"]
-    presentacion  = st.selectbox("Presentación", presentaciones)
-
-    # 5.4 Parámetros
-    cantidad     = st.number_input("Cantidad", min_value=1.0, step=1.0, value=1.0)
+    producto = st.selectbox("Producto", precios_df["Producto"].unique())
+    pres = list(set(precios_df.columns) & set(costos_df.columns) - {"Producto"})
+    presentacion = st.selectbox("Presentación", pres)
+    cantidad = st.number_input("Cantidad", min_value=1.0, step=1.0, value=1.0)
     incluye_iva  = st.checkbox("¿Precio incluye IVA?", value=True)
     pago_tarjeta = st.checkbox("¿Pago con tarjeta?", value=False)
+    precio_venta = float(prices := precios_df.loc[precios_df["Producto"] == producto, presentacion].iloc[0])
+    precio_costo = float(costs := costos_df.loc[costos_df["Producto"] == producto, presentacion].iloc[0])
+    st.markdown(f"**Venta:** {precio_venta}   —   **Costo:** {precio_costo}")
+    if st.button("Registrar"):
+        registrar_venta(producto, presentacion, cantidad,
+                        precio_venta, precio_costo,
+                        incluye_iva, pago_tarjeta)
 
-    # 5.5 Obtén precios desde los DataFrames
-    precio_venta = float(precios_df.loc[precios_df["Producto"] == producto, presentacion].iloc[0])
-    precio_costo = float(costos_df.loc[costos_df["Producto"] == producto, presentacion].iloc[0])
+def page_inventario():
+    st.header("📦 Inventario")
+    df = load_df("Inventario")
+    st.dataframe(df)
 
-    st.markdown(f"**Precio venta:** {precio_venta} — **Costo unitario:** {precio_costo}")
+def page_egresos():
+    st.header("💸 Egresos")
+    df = load_df("Egresos")
+    st.dataframe(df)
 
-    # 5.6 Registrar venta
-    if st.button("🖊️ Registrar venta"):
-        registrar_venta(
-            producto, presentacion, cantidad,
-            precio_venta, precio_costo,
-            incluye_iva, pago_tarjeta
-        )
+# ——————————————————————————————————————
+# 5) Menú principal
+# ——————————————————————————————————————
+def main():
+    st.title("📊 Panel de Control – ROCA VIVA / FZClean")
+    menu = st.sidebar.radio("Navegación", [
+        "Calculadora", "Ventas", "Inventario", "Egresos"
+    ])
+    if menu == "Calculadora":
+        page_calculadora()
+    elif menu == "Ventas":
+        page_ventas()
+    elif menu == "Inventario":
+        page_inventario()
+    elif menu == "Egresos":
+        page_egresos()
 
-    # 5.7 Sidebar: Inventario y Egresos
-    st.sidebar.title("📦 Inventario")
-    st.sidebar.dataframe(load_df("Inventario"))
-    st.sidebar.title("💸 Egresos")
-    st.sidebar.dataframe(load_df("Egresos"))
+if __name__ == "__main__":
+    main()
 
 
 if __name__ == "__main__":
