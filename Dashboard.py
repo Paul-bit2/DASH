@@ -3,6 +3,7 @@ import pandas as pd
 import gspread
 from google.oauth2 import service_account
 from datetime import datetime
+from gspread.exceptions import GSpreadException
 
 # ——————————————————————————————————————
 # 1) Autenticación con Google Sheets (añade scope de Drive)
@@ -21,6 +22,7 @@ gc = gspread.authorize(credentials)
 # El ID de tu Google Sheets (el que aparece en la URL)
 SPREADSHEET_ID = "1mVVYxXd3vR2Ft9BD0QqWDD3_k87C3pHgeqI63gHEkJA"
 
+
 # ——————————————————————————————————————
 # 2) Helpers de acceso a datos
 # ——————————————————————————————————————
@@ -28,31 +30,46 @@ def list_worksheets():
     sh = gc.open_by_key(SPREADSHEET_ID)
     return [ws.title for ws in sh.worksheets()]
 
+
 def load_df(ws_name: str) -> pd.DataFrame:
-    """Carga ws_name y lo devuelve como DataFrame; si falla, muestra las hojas disponibles."""
+    """
+    Carga ws_name y lo devuelve como DataFrame.
+    Si falla en abrir o en get_all_records, muestra las pestañas disponibles.
+    """
     sh = gc.open_by_key(SPREADSHEET_ID)
     try:
         ws = sh.worksheet(ws_name)
-    except gspread.exceptions.GSpreadException:
+    except GSpreadException:
         st.error(
             f"❌ No encontré la pestaña '{ws_name}'.\n"
             f"Las pestañas disponibles son:\n  • " + "\n  • ".join(list_worksheets())
         )
         st.stop()
-    return pd.DataFrame(ws.get_all_records())
+    try:
+        records = ws.get_all_records()
+    except GSpreadException:
+        st.error(
+            f"❌ Falló al leer registros de '{ws_name}'.\n"
+            f"Quizás la hoja está vacía o mal formada.\n"
+            f"Las pestañas disponibles son:\n  • " + "\n  • ".join(list_worksheets())
+        )
+        st.stop()
+    return pd.DataFrame(records)
+
 
 def append_row(ws_name: str, row: list):
     """Añade una fila al final de ws_name."""
     sh = gc.open_by_key(SPREADSHEET_ID)
     try:
         ws = sh.worksheet(ws_name)
-    except gspread.exceptions.GSpreadException:
+    except GSpreadException:
         st.error(
             f"❌ No encontré la pestaña '{ws_name}' para escribir.\n"
             f"Las pestañas disponibles son:\n  • " + "\n  • ".join(list_worksheets())
         )
         st.stop()
     ws.append_row(row, value_input_option="USER_ENTERED")
+
 
 # ——————————————————————————————————————
 # 3) Lógica de cálculo de venta y distribución
@@ -63,11 +80,12 @@ def calcular_ganancia(precio_venta, precio_costo, cantidad, incluye_iva, pago_ta
     sat       = round(total_venta * 0.16, 4) if incluye_iva else 0
     comision  = round(total_venta * 0.036 * 1.16, 4) if pago_tarjeta else 0
     ganancia  = round(total_venta - total_costo - sat - comision, 4)
-    reserva   = round(ganancia * 0.20, 4)   # 20% reserva empresa
-    iglesia   = 0                           # 0% iglesia
-    reyna     = round(ganancia * 0.05, 4)   # 5% Reyna
+    reserva   = round(ganancia * 0.20, 4)
+    iglesia   = 0
+    reyna     = round(ganancia * 0.05, 4)
     paul      = round(ganancia - reserva - iglesia - reyna, 4)
     return total_venta, total_costo, sat, comision, ganancia, reserva, iglesia, reyna, paul
+
 
 # ——————————————————————————————————————
 # 4) Registrar venta en la pestaña "Ventas"
@@ -85,6 +103,7 @@ def registrar_venta(producto, presentacion, cantidad,
     ]
     append_row("Ventas", fila)
     st.success("✅ Venta registrada en Google Sheets")
+
 
 # ——————————————————————————————————————
 # 5) App principal de Streamlit
