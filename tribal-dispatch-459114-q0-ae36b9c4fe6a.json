@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "tribal-dispatch-459114-q0",
+  "private_key_id": "ae36b9c4fe6a4c94b0f09177a980842791119405",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCSbz5joZida+Eu\nsrHlo2PglRNFx5GLxpUF6AUjclL5FvaYM/YWH4d9wJ9cQaR18p+BburHexYkulp+\natXT8nbqJbukjpub2vbmOCXRLQDkrWUXyccDZeXw808dOQQ++uztpuStfKNvNEOx\n/TKqINdfZ4l4uchDxsEws1tMlGcPiCpuMwyZUyDS/eOvRTvOi7migCsohI2kZw9h\nCysyZ4W2kAurce2VnUz0UMLXI+xgcX70XsECDfBXF4MzWY/AS4RnxVokTecbsQQ0\nNTCPmxElCExVauhKdaBSYYXTDkKvc25UpjZbv44Ak260wfvJ+uzBOXX0bXzk9Zai\nIK3UlNkHAgMBAAECggEAIxZrzSTB9GqOnQltbhh+DKi74vsEaYkuWSl03b79mbkC\nYosE2t04Mo4uwUTrWuXFiZahxCW+sxNCLst7rBsLmmRrN22CZNCNW7G1gg82CRVx\nRUdwm+RVOiya1uY8Gbk3f2R/pABbCwDrfaEtfC19Xdtpydc+YNslnH1Fka53mXVK\n4w+dy2gbDOUy/XSP024HJoPzDykQPbErMBuzJU+KQ4VI5LykpE3+mkfUajxRbDGP\npvGDUOmNmp0+aW+LLRykRrqEpsVN3fgW9GfzWrkPZr/z15ENolPQydfDWfVpWKbh\ndMG6RPZmgaSmq8vwRBvnU1tZnzDuQqoGCaqWIdHF/QKBgQDFk/Rhj8BrG+6Z68hi\n57bARpvFomW2O+XqY0BXcQBqAp4T3yA9ADlg6TXrKSW6BqlBSUUj+A0Yct8QQuG9\n2MgT/3gn19im15KQIRNOH6LjQZGrlUKxEJ1kYrSZp/+/Si/ApgHxtdMaIDmKK0KA\nz9L2kTCUHXH0PBiqg469H9bB9QKBgQC9u+Pmf7ljIwQsBq0KMwnZPjyt63PLFGUw\nOBDjsuH51ZVyYaM38unJycZ51/3TykqYUOwcLBXAIOISZ02L+VWoDod8kPn46l5T\nhxUj4zGu0RfjBLFcrH+GPRXMha8VfnKJfUJ2mlJqJK/dZ+GaCCo8pBxladCP8fLk\n72whfdjFiwKBgG8vI4cDbjTYMx1LIikGXEE3etFs4e/7JRcRY1PRs3n0nyBvn6S0\nS5XNpxn+vcxBk1257b6gCD6J5h0whfhf1bfrO6KwRKsfBMs20bZU90UL0P3NsQoT\nX37uTNNrRvBOvzCaOt3ahEFfgQHP9kympwE6EyxGpanbZ8YM4nZrRF9BAoGAN29K\nKvJua/SzJ1nb/PrkicCRYg9FCbSvy+LVrHF7bM9mlsDIO3SRsg9uGfNtig+0s8QQ\n+Do5MKVq6A2erqLuz+dO1qpVHtD7NlRlbNLYlUcqP34DhBwyNjpqwBLfENydAmbC\noHx+T9zgNURAugxgqs8YLNk5wpTibtk1MqPeTfkCgYBKKb9Vxlh2natPsQlkLfX4\nse64gWyih4QcrneE6ostfhyPaVR6rahA5XfuZHYqK3HpGWAOLZReEJvCQCCbZDPd\nw2bERyMxI3E/Tnw6i1+v0zrnAZYTlbZ5SLY+bt+ZFQPoy/Guo+lOj/3ug4PjskXR\nb6HEhLgZn6MxIOmY+AweiQ==\n-----END PRIVATE KEY-----\n",
+  "client_email": "roca-viva@tribal-dispatch-459114-q0.iam.gserviceaccount.com",
+  "client_id": "100707975440794237472",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/roca-viva%40tribal-dispatch-459114-q0.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
