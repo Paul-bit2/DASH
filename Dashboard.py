@@ -1,138 +1,122 @@
 import streamlit as st
-import pandas as pd
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2 import service_account
+import pandas as pd
+import numpy as np
 
-# Establecer credenciales de Google Sheets
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name('tribal-dispatch-459114-q0-ae36b9c4fe6a.json', scope)
-client = gspread.authorize(creds)
+# Autenticación con Google Sheets desde los secretos de Streamlit Cloud
+def authenticate_with_google_sheets():
+    creds = service_account.Credentials.from_service_account_info(
+        st.secrets["google_sheets_credentials"]
+    )
+    client = gspread.authorize(creds)
+    return client
 
-# Abrir la hoja de Google Sheets
-sheet = client.open('NombreDeTuHojaDeGoogleSheets')  # Reemplaza con el nombre correcto de tu hoja
-precio_venta_hoja = sheet.worksheet("Precio Venta")
-costos_hoja = sheet.worksheet("Costos")
-recetas_rv_hoja = sheet.worksheet("Recetas RV")
-recetas_fz_hoja = sheet.worksheet("Recetas FZ")
-inventario_hoja = sheet.worksheet("Inventario")
-ventas_hoja = sheet.worksheet("Ventas")
-egresos_hoja = sheet.worksheet("Egresos")
+# Cargar los datos desde una hoja específica de Google Sheets
+def load_data_from_sheet(sheet_name, worksheet_name):
+    client = authenticate_with_google_sheets()
+    sheet = client.open(sheet_name)
+    worksheet = sheet.worksheet(worksheet_name)
+    data = worksheet.get_all_records()
+    df = pd.DataFrame(data)
+    return df
 
-# Cargar datos desde Google Sheets
-def cargar_datos(hoja):
-    return pd.DataFrame(hoja.get_all_records())
+# Función para realizar los cálculos de ganancias, distribución y más
+def calcular_ganancia(precio_venta, precio_costo, cantidad, iva_incluido, pago_tarjeta):
+    # Cálculos de totales
+    total_venta = precio_venta * cantidad
+    total_costo = precio_costo * cantidad
 
-# Cargar hojas en DataFrames
-df_precio_venta = cargar_datos(precio_venta_hoja)
-df_costos = cargar_datos(costos_hoja)
-df_recetas_rv = cargar_datos(recetas_rv_hoja)
-df_recetas_fz = cargar_datos(recetas_fz_hoja)
-df_inventario = cargar_datos(inventario_hoja)
-df_ventas = cargar_datos(ventas_hoja)
-df_egresos = cargar_datos(egresos_hoja)
-
-# Mostrar un selector para elegir entre RV y FZ
-opcion = st.selectbox('Selecciona la gama de productos', ['Roca Viva (RV)', 'FZClean (FZ)'])
-
-# Función para calcular el total y la venta
-def calcular_venta(producto, cantidad, gama, pago_con_tarjeta=False):
-    if gama == 'Roca Viva (RV)':
-        # Buscar en la hoja de recetas RV
-        precio = df_precio_venta[df_precio_venta['Producto'] == producto]['Rentas'].values[0]
-        costo = df_costos[df_costos['Producto'] == producto]['Rentas'].values[0]
-    else:
-        # Buscar en la hoja de recetas FZ
-        precio = df_precio_venta[df_precio_venta['Producto'] == producto]['Rentas'].values[0]
-        costo = df_costos[df_costos['Producto'] == producto]['Rentas'].values[0]
-
-    # Cálculo del total de venta
-    total_venta = precio * cantidad
-    total_costo = costo * cantidad
-
-    # Cálculo de la ganancia
-    ganancia = total_venta - total_costo
-
-    # Si el pago es con tarjeta, se aplica el 3.6% + IVA sobre el total de la venta
-    comision = 0
-    if pago_con_tarjeta:
-        comision = total_venta * 0.036  # 3.6% de comisión
-        iva_comision = comision * 0.16  # IVA sobre la comisión
-        comision += iva_comision  # Total comisión + IVA
-
-    # Calcular el SAT si el precio incluye IVA
+    # Cálculo de SAT si incluye IVA
     sat = 0
-    if "sí" in str(producto).lower():
-        sat = total_venta * 0.16  # 16% de IVA si aplica
+    if iva_incluido:
+        sat = round(total_venta * 0.16, 4)  # 16% de IVA
 
-    # Regresar el total de venta, total de costo, ganancia, y la comisión
-    return total_venta, total_costo, ganancia, comision, sat
+    # Cálculo de comisión por tarjeta
+    comision = 0
+    if pago_tarjeta:
+        comision = round(total_venta * 0.036 * 1.16, 4)  # 3.6% + IVA sobre la comisión
 
-# Función para calcular la distribución de ganancias
-def calcular_distribucion(ganancia):
-    reserva_empresa = ganancia * 0.20  # 20% para la reserva de la empresa
-    reyna = ganancia * 0.15  # 15% para Reyna
-    paul = ganancia * 0.65  # 65% para Paul
-    return reserva_empresa, reyna, paul
+    # Ganancia
+    ganancia = round(total_venta - total_costo - sat - comision, 4)
 
-# Interfaz de usuario en Streamlit
-producto = st.selectbox('Selecciona el producto', df_precio_venta['Producto'].values)
-cantidad = st.number_input('Cantidad a vender (en litros)', min_value=1, value=1)
+    # Distribución de ganancias
+    reserva = round(ganancia * 0.2, 4)  # 20% para la reserva de la empresa
+    iglesia = 0  # 0% para iglesia
+    reyna = round(ganancia * 0.2, 4)  # 20% para Reyna
+    paul = round(ganancia * 0.6, 4)  # 60% para Paul
 
-# Opción para pago con tarjeta
-pago_con_tarjeta = st.radio('¿El pago es con tarjeta?', ('No', 'Sí')) == 'Sí'
+    return total_venta, total_costo, sat, comision, ganancia, reserva, iglesia, reyna, paul
 
-# Calcular los totales
-if st.button('Calcular Venta'):
-    total_venta, total_costo, ganancia, comision, sat = calcular_venta(producto, cantidad, opcion, pago_con_tarjeta)
-    reserva_empresa, reyna, paul = calcular_distribucion(ganancia)
+# Función para registrar una venta en Google Sheets
+def registrar_venta(sheet_name, worksheet_name, fecha, producto, presentacion, cantidad, precio_venta, precio_costo, iva_incluido, pago_tarjeta):
+    # Cálculos de ganancias
+    total_venta, total_costo, sat, comision, ganancia, reserva, iglesia, reyna, paul = calcular_ganancia(precio_venta, precio_costo, cantidad, iva_incluido, pago_tarjeta)
 
-    st.write(f"Total Venta: ${total_venta}")
-    st.write(f"Total Costo: ${total_costo}")
-    st.write(f"Ganancia: ${ganancia}")
-    st.write(f"Comisión (si aplica tarjeta): ${comision}")
-    st.write(f"SAT (si aplica IVA): ${sat}")
-    st.write(f"Distribución de ganancias:")
-    st.write(f" - Reserva de la empresa: ${reserva_empresa}")
-    st.write(f" - Reyna: ${reyna}")
-    st.write(f" - Paul: ${paul}")
+    # Conexión a Google Sheets
+    client = authenticate_with_google_sheets()
+    sheet = client.open(sheet_name)
+    worksheet = sheet.worksheet(worksheet_name)
 
-# Botón para registrar venta
-if st.button('Registrar Venta'):
-    fecha = pd.to_datetime('today').strftime('%Y-%m-%d')
-    nueva_venta = [fecha, producto, cantidad, total_venta, total_costo, ganancia, reserva_empresa, reyna, paul, comision, sat]
-    df_ventas.loc[len(df_ventas)] = nueva_venta
-    # Actualiza la hoja de ventas en Google Sheets
-    ventas_hoja.update([df_ventas.columns.values.tolist()] + df_ventas.values.tolist())
-    st.write("Venta registrada correctamente.")
+    # Registrar los datos en Google Sheets
+    worksheet.append_row([
+        fecha, producto, presentacion, cantidad, precio_venta, precio_costo,
+        total_venta, total_costo, ganancia, reserva, iglesia, reyna, paul, sat
+    ])
 
-# Función para manejar la producción y revertir la acción
-def manejar_produccion(producto, cantidad, gama, revertir=False):
-    # Actualizar inventario y producción
-    if revertir:
-        # Restar del inventario lo producido
-        df_inventario.loc[df_inventario['Producto'] == producto, 'Cantidad'] += cantidad
-        st.write(f"Producción revertida para {producto}. El inventario ha sido restaurado.")
+    st.success("Venta registrada correctamente")
+
+# Función para seleccionar productos
+def seleccionar_producto(df):
+    producto = st.selectbox("Selecciona un producto", df["Producto"].unique())
+    return df[df["Producto"] == producto]
+
+# Página principal de Streamlit
+def main():
+    st.title("Sistema de Gestión de Producción")
+
+    # Selección de línea de productos (Roca Viva o FZClean)
+    product_line = st.selectbox("Selecciona la línea de productos:", ("Roca Viva (RV)", "FZClean (FZ)"))
+
+    # Cargar los productos y precios de Google Sheets según la línea seleccionada
+    if product_line == "Roca Viva (RV)":
+        sheet_name = "NombreDeTuHojaGoogleSheets"  # Cambia por el nombre de tu hoja en Google Sheets
+        worksheet_name = "RV"  # Cambia por el nombre de la hoja que contiene los productos RV
     else:
-        # Descontar del inventario lo producido
-        df_inventario.loc[df_inventario['Producto'] == producto, 'Cantidad'] -= cantidad
-        st.write(f"Producción registrada para {producto}. El inventario ha sido actualizado.")
+        sheet_name = "NombreDeTuHojaGoogleSheets"  # Cambia por el nombre de tu hoja en Google Sheets
+        worksheet_name = "FZ"  # Cambia por el nombre de la hoja que contiene los productos FZ
 
-    # Actualizar Google Sheets
-    inventario_hoja.update([df_inventario.columns.values.tolist()] + df_inventario.values.tolist())
+    # Cargar los datos desde Google Sheets
+    df = load_data_from_sheet(sheet_name, worksheet_name)
 
-# Botón para manejar la producción
-if st.button('Registrar Producción'):
-    manejar_produccion(producto, cantidad, opcion)
+    # Mostrar los productos disponibles
+    st.write("Productos disponibles:", df)
 
-# Botón para revertir la producción
-if st.button('Revertir Producción'):
-    manejar_produccion(producto, cantidad, opcion, revertir=True)
+    # Seleccionar un producto
+    selected_product_data = seleccionar_producto(df)
 
-# Función para mostrar inventario
-st.write("Inventario de productos")
-st.dataframe(df_inventario)
+    # Mostrar los detalles del producto seleccionado
+    st.write("Detalles del producto seleccionado:", selected_product_data)
 
-# Función para mostrar egresos
-st.write("Egresos de la empresa")
-st.dataframe(df_egresos)
+    # Ingresar la cantidad y precios
+    cantidad = st.number_input("Cantidad a vender", min_value=1, step=1, value=1)
+    iva_incluido = st.selectbox("¿Incluye IVA?", ("Sí", "No")) == "Sí"
+    pago_tarjeta = st.selectbox("¿Pago con tarjeta?", ("Sí", "No")) == "Sí"
+
+    # Asumir precios como ejemplo (estos pueden venir del DataFrame)
+    precio_venta = selected_product_data["Precio de Venta"].values[0]  # Asegúrate de que el nombre de columna sea correcto
+    precio_costo = selected_product_data["Costo"].values[0]  # Asegúrate de que el nombre de columna sea correcto
+
+    # Calcular y mostrar los totales
+    if st.button("Registrar Venta"):
+        registrar_venta(sheet_name, worksheet_name, "2025-05-07", selected_product_data["Producto"].values[0],
+                         "1 litro", cantidad, precio_venta, precio_costo, iva_incluido, pago_tarjeta)
+
+    # Mostrar el total de las ganancias
+    st.write(f"Precio de venta: {precio_venta}")
+    st.write(f"Precio de costo: {precio_costo}")
+
+if __name__ == "__main__":
+    main()
+
 
