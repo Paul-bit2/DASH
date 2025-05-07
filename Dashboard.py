@@ -1,65 +1,83 @@
 import streamlit as st
-import pandas as pd
-from google.oauth2 import service_account
 import gspread
+from google.oauth2 import service_account
+import json
 
-# Configuración de autenticación con Google Sheets
-creds = service_account.Credentials.from_service_account_info({
-    "type": "service_account",
-    "project_id": "tribal-dispatch-459114-q0",
-    "private_key_id": "8de35b0b17b2635ace5d4a7fdac54852be811d83",
-    "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDvLQj0iMAZHLTH\nBFaskM8UU95bMXEevkgIKGeMtltg2NVI14klXai8foZERLZQA9grd0LepgWIgKM0\nSbveDsJUoOfDpjWzBj0HGfFIhx428s/DXt/apAZ2KE4+Nhq8EwqkOHJaBW4jmMTa\niPWcIXpcMGYumDNi6ePVCeKMS6H2gtBukTml+cRKS8wD4lX8YHWdtf8BuuvJt0IZ\nRLBA3KAwarrU/HZpPtZo8cEPN5wUtgSXxct37PKz1maYNm3lBCk0h7HMyNZdRI/s\njtsT0FkozyYyHqgivAbsk4aKrAOrGZMqHClz7FQmwkd7vKROXfD0e7NDoTS4d0/o\nHTIVTsuvAgMBAAECggEAVJBcN7V4Egjrw+f9SzNB/EJw/lY7VC7b4gKDJiW9pj7U\nHlaSl4MHa2niyBVxTlYloqyemIEjuLEewxiE04ztWaWwfCTynJMKlc2u2UFoxe3Q\n1pdfV3siC7nRfD598lxbKVgJ2llMKUrU4x2ElYjireCw6C2JEaJ3mvXNQ2RkZfcI\nhpVslF3omcH9sZt7HRgh9yyJi0EcU9HqBk27lwY4Jb4iUOtzdeoEOMnaWH0rabWD\nqQP7Rn+Xodfy/U1kYxb1Kl0spLKSVnFKIIbImnlzErF8Vw9j9aAh9LPc+Esr3Hxe\nIkMHvnSZdsaJXioE5UM0XKd9cjDPkV3YDyBkifU0QQKBgQD5G/TeZvHxS6Kl9Zxq\nL2abvbmgy1MEcylMTQ0pgOa/4YpOwx9dpBpu8D5X5WgP+QIKMkdTi9VSwhJ74XP6\nWLKL7+/6dK2SY78VC4akEGSrPngvFp3AttT1oWGZBgjujxCop1eKVh4NtRXmkb77\nmsELPutNSP8jO0a4SIz37DkEQQKBgQD1yrygQTI0dA5tPL6t7kWoGZ4ykF++Z+RM\nANdqPMzQcCDQqWa+7FuG5luC0Ck/Xqkbt5GF65uNvlGyyS761letSLiKNXDcJRlb\ngSy0hwetZ9V7UD/62W0t0lY61KapCo3lB5BY/TL8DxHIFBt3SqZUuif5/7ZcWUM0\nG7doRAMT7wKBgQDFNa+uXhtN5o32CrJwkeQOia2qMS0gyba5FArGf6it4XToE6sC\nLAdNKl6AoTm3428M+W7kIkCYitGtRvfVCmEXTbVTNwmuac79bymBOwUnWIY26RWs\nWlHPv5oPVeq+SX5rtkckWjbirSiQZ3OlpocLSx1nCtIJZ0T+YVlQcK9WwQKBgQC9\nm1O/XAvaotyuL/n4OqLJdlmvL+hr/cEDUHLcpWJqONVXohZ8meBRREq7stDe7asO\nkqFT6djpkzN68++l2MtyBXM2SttxN71D9XYDHVcy0bLBmbqBTFEI1AVpBLo8FMQ5\nNYiI3WoDP6y756b4c0G0gpZsKHMI8mMBQ5BMgorNSQKBgQDVgrAzYrun36j/pCfI\nTk9/K7HmBIOwls8UGGze7VmLTpDnwI3SDM+N1siU8TpH5j/G+v13XIAzEtVhyalY\ndgZci0txM//YUsOfgMi6Rf9c3UivAXkiDn6IX3Qf4QwRJ8JsCh91sLUyZFM/yV3m\nQWLOECAakm3hk1H9zYgf/eEfUg==\n-----END PRIVATE KEY-----"
-client_email = "roca-viva@tribal-dispatch-459114-q0.iam.gserviceaccount.com"
-client_id = "100707975440794237472"
-auth_uri = "https://accounts.google.com/o/oauth2/auth"
-token_uri = "https://oauth2.googleapis.com/token"
-auth_provider_x509_cert_url = "https://www.googleapis.com/oauth2/v1/certs"
-client_x509_cert_url = "https://www.googleapis.com/robot/v1/metadata/x509/roca-viva%40tribal-dispatch-459114-q0.iam.gserviceaccount.com"
-})
+# Obtener las credenciales desde los secretos
+creds = json.loads(st.secrets["google_sheets_credentials"])
 
-# Conectar a Google Sheets
+# Autenticación con Google Sheets
+credentials = service_account.Credentials.from_service_account_info(creds)
+client = gspread.authorize(credentials)
+
+# Conectar con la API de Google Sheets
 client = gspread.authorize(creds)
 
-# Abrir la hoja de cálculo
-sheet_name = "ROCA VIVA"  # Cambia al nombre exacto de tu hoja de cálculo en Google Sheets
-sheet = client.open(sheet_name)
-worksheet = sheet.get_worksheet(0)  # Cambia el índice si tienes varias hojas en tu documento
+# Obtener la hoja de trabajo
+sheet_name = 'ROCA VIVA'  # El nombre de tu hoja de Google Sheets
+worksheet = client.open(sheet_name).sheet1
 
-# Leer los datos de la hoja de Google Sheets en un DataFrame
-data = worksheet.get_all_records()
-df = pd.DataFrame(data)
+# Función para obtener datos de la hoja de Google Sheets
+def get_data_from_sheet():
+    data = worksheet.get_all_records()
+    return pd.DataFrame(data)
 
-# Función para mostrar los datos de la hoja de Google Sheets en Streamlit
-def show_data():
-    st.write(df)
+# Función para enviar los datos calculados de producción
+def update_data_in_sheet(sheet_name, row, data):
+    worksheet = client.open(sheet_name).sheet1
+    worksheet.insert_row(data, row)  # Inserta los datos en una nueva fila
 
-# Cálculos de ventas y distribución
-def calculate_sales_and_distribution(product, price, quantity, iva_inclusive, payment_method):
-    # Aquí tomamos el precio y calculamos con IVA si es necesario
+# Interfaz de usuario
+def main():
+    st.title("Cálculo de Ventas y Producción")
+    st.subheader("Calculadora de ventas y distribución")
+
+    # Cargar los datos de la hoja de Google Sheets
+    df = get_data_from_sheet()
+
+    # Mostrar los datos en Streamlit
+    st.write("Datos de la hoja de Google Sheets:")
+    st.dataframe(df)
+
+    # Selección de producto y otros campos
+    product = st.selectbox('Selecciona el producto', df['Producto'].unique())
+    quantity = st.number_input('Cantidad de producción', min_value=1, step=1)
+    iva_inclusive = st.checkbox('¿Incluye IVA?')
+    payment_method = st.radio('Método de pago', ['Efectivo', 'Tarjeta'])
+
+    # Botón de calcular
+    if st.button('Calcular'):
+        calculate_sales_and_distribution(product, quantity, iva_inclusive, payment_method)
+
+# Cálculos de venta y distribución
+def calculate_sales_and_distribution(product, quantity, iva_inclusive, payment_method):
+    # Obtener el precio del producto seleccionado
+    price = df[df['Producto'] == product]['Granel'].values[0]  # Asumiendo que usamos el precio "Granel"
+
+    # Si el precio incluye IVA, lo restamos para calcular el precio sin IVA
     if iva_inclusive:
-        sale_price_without_iva = price / 1.16  # Si incluye IVA
+        price_without_iva = price / 1.16
     else:
-        sale_price_without_iva = price
-    
-    # Calculamos la ganancia
-    cost = df[df['Producto'] == product].iloc[0]['Costo unitario']  # Costo del producto
-    total_sale = sale_price_without_iva * quantity
-    total_profit = total_sale - cost * quantity
-    
-    # Distribución de ganancias
+        price_without_iva = price
+
+    # Calcular total de la venta
+    total_sale = price_without_iva * quantity
+
+    # Cálculos de ganancias y distribución
+    total_profit = total_sale - price * quantity
     company_reserve = total_profit * 0.20  # 20% para la empresa
-    church = 0  # Iglesia tiene 0% por ahora
+    church = 0  # 0% para la iglesia
     reyna = total_profit * 0.05  # 5% para Reyna
     paul = total_profit - company_reserve - church - reyna  # El resto es para Paul
 
-    # Descuento si se paga con tarjeta
+    # Descuento de tarjeta
     if payment_method == "Tarjeta":
-        transaction_fee = total_sale * 0.036 * 1.16  # 3.6% de la venta + IVA sobre la comisión
+        transaction_fee = total_sale * 0.036 * 1.16  # 3.6% más IVA
         total_sale -= transaction_fee
-    
-    # Cálculos del SAT si corresponde
+
+    # Calcular SAT
     if iva_inclusive:
-        sat = total_sale * 0.16  # El 16% es para el SAT si se incluye IVA
+        sat = total_sale * 0.16  # El 16% es para SAT si incluye IVA
     else:
         sat = 0
 
@@ -71,24 +89,6 @@ def calculate_sales_and_distribution(product, price, quantity, iva_inclusive, pa
     st.write(f"Paul: {paul}")
     st.write(f"SAT (16% si incluye IVA): {sat}")
     st.write(f"Total con impuestos: {total_sale - sat}")
-
-# Interfaz de usuario para Streamlit
-def main():
-    st.title("Cálculo de Ventas y Distribución")
-    st.subheader("Selecciona el producto y realiza el cálculo")
-
-    # Seleccionar producto
-    product = st.selectbox('Selecciona el producto:', df['Producto'].unique())
-
-    # Ingresar precio, cantidad y otras opciones
-    price = st.number_input('Precio de venta (sin IVA)', min_value=0.0, step=0.01)
-    quantity = st.number_input('Cantidad de venta', min_value=1, step=1)
-    iva_inclusive = st.checkbox('¿Incluye IVA?')
-    payment_method = st.radio('Método de pago', ('Efectivo', 'Tarjeta'))
-
-    # Botón para calcular
-    if st.button('Calcular'):
-        calculate_sales_and_distribution(product, price, quantity, iva_inclusive, payment_method)
 
 if __name__ == '__main__':
     main()
