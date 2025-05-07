@@ -3,11 +3,14 @@ import gspread
 from google.oauth2 import service_account
 import json
 
-# Obtener las credenciales desde los secretos
-creds = json.loads(st.secrets["google_sheets_credentials"])
+# Asegúrate de que el formato de tus secretos sea un string JSON válido
+creds = st.secrets["google_sheets_credentials"]
 
-# Autenticación con Google Sheets
-credentials = service_account.Credentials.from_service_account_info(creds)
+# Si el secreto es un string, lo convierte en un diccionario
+creds_dict = json.loads(creds)
+
+# Autenticación con Google Sheets usando las credenciales del secreto
+credentials = service_account.Credentials.from_service_account_info(creds_dict)
 client = gspread.authorize(credentials)
 
 # Conectar con la API de Google Sheets
