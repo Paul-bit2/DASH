@@ -62,14 +62,14 @@ def append_row(ws_name: str, row: list):
 # ——————————————————————————————————————
 def calcular_ganancia(precio_venta, precio_costo, cantidad, incluye_iva, pago_tarjeta):
     total_venta = round(precio_venta * cantidad, 4)
-    total_costo = round(precio_costo  * cantidad, 4)
-    sat        = round(total_venta * 0.16, 4) if incluye_iva else 0
-    comision   = round(total_venta * 0.036 * 1.16, 4) if pago_tarjeta else 0
-    ganancia   = round(total_venta - total_costo - sat - comision, 4)
-    reserva    = round(ganancia * 0.20, 4)
-    iglesia    = 0
-    reyna      = round(ganancia * 0.05, 4)
-    paul       = round(ganancia - reserva - iglesia - reyna, 4)
+    total_costo = round(precio_costo * cantidad, 4)
+    sat = round(total_venta * 0.16, 4) if incluye_iva else 0
+    comision = round(total_venta * 0.036 * 1.16, 4) if pago_tarjeta else 0
+    ganancia = round(total_venta - total_costo - sat - comision, 4)
+    reserva = round(ganancia * 0.20, 4)
+    iglesia = 0
+    reyna = round(ganancia * 0.05, 4)
+    paul = round(ganancia - reserva - iglesia - reyna, 4)
     return total_venta, total_costo, sat, comision, ganancia, reserva, iglesia, reyna, paul
 
 # ——————————————————————————————————————
@@ -94,17 +94,21 @@ def registrar_venta(producto, presentacion, cantidad,
 # ——————————————————————————————————————
 def page_calculadora():
     st.header("🧪 Calculadora de Ingredientes")
-    linea = st.selectbox("Línea de productos", ["Roca Viva (RV)", "FZClean (FZ)"])
-    ws_recetas = "Recetas RV" if linea.endswith("RV") else "Recetas FZ"
+    linea_choice = st.selectbox("Línea de productos", ["Roca Viva (RV)", "FZClean (FZ)"])
+    if linea_choice == "Roca Viva (RV)":
+        ws_recetas = "Recetas RV"
+    else:
+        ws_recetas = "Recetas FZ"
     df_rec = load_df(ws_recetas)
-    # Expandir producto
+    # Expandir producto en filas
     df_rec["_Product"] = df_rec["Producto"].replace("", np.nan).ffill()
-    producto = st.selectbox("Producto", df_rec["_Product"].unique())
+    productos = df_rec["_Product"].unique().tolist()
+    st.subheader("Selecciona producto")
+    producto = st.selectbox("Producto", productos)
     litros = st.number_input("Litros a preparar", min_value=1.0, step=1.0, value=1.0)
     if st.button("Calcular ingredientes"):
         sel = df_rec[df_rec["_Product"] == producto].copy()
-        # La receta base es para 200 litros
-        base_litros = 200.0
+        base_litros = float(sel["Cantidad (L)"].astype(float).iloc[0])
         factor = litros / base_litros
         sel["Cantidad Necesaria (L)"] = sel["Cantidad (L)"].astype(float) * factor
         st.dataframe(sel[["Ingrediente", "Cantidad Necesaria (L)"]])
@@ -113,24 +117,27 @@ def page_calculadora():
 def page_ventas():
     st.header("💰 Registrar Venta")
     precios_df = load_df("Precio Venta")
-    costos_df  = load_df("Costos")
-    producto = st.selectbox("Producto", precios_df["Producto"].unique())
+    costos_df = load_df("Costos")
+    productos = precios_df["Producto"].unique().tolist()
+    producto = st.selectbox("Producto", productos)
     pres = [c for c in precios_df.columns if c != "Producto" and c in costos_df.columns]
     presentacion = st.selectbox("Presentación", pres)
     cantidad = st.number_input("Cantidad", min_value=1.0, step=1.0, value=1.0)
-    incluye_iva  = st.checkbox("¿Precio incluye IVA?", value=True)
+    incluye_iva = st.checkbox("¿Precio incluye IVA?", value=True)
     pago_tarjeta = st.checkbox("¿Pago con tarjeta?", value=False)
     precio_venta = float(precios_df.loc[precios_df["Producto"] == producto, presentacion].iloc[0])
     precio_costo = float(costos_df.loc[costos_df["Producto"] == producto, presentacion].iloc[0])
     st.markdown(f"**Venta:** {precio_venta}   —   **Costo:** {precio_costo}")
-    if st.button("Registrar"):
+    if st.button("Registrar Venta"):
         registrar_venta(producto, presentacion, cantidad,
                         precio_venta, precio_costo,
                         incluye_iva, pago_tarjeta)
 
+
 def page_inventario():
     st.header("📦 Inventario")
     st.dataframe(load_df("Inventario"))
+
 
 def page_egresos():
     st.header("💸 Egresos")
