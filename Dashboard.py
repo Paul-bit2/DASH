@@ -5,7 +5,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 # Establecer credenciales de Google Sheets
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name('path_to_your_json_file.json', scope)  # Actualiza el path de tu archivo JSON
+creds = ServiceAccountCredentials.from_json_keyfile_name('tribal-dispatch-459114-q0-ae36b9c4fe6a.json', scope)
 client = gspread.authorize(creds)
 
 # Abrir la hoja de Google Sheets
