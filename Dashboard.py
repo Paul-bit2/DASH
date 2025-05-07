@@ -34,15 +34,16 @@ def load_df(ws_name: str) -> pd.DataFrame:
         ws = sh.worksheet(ws_name)
         values = ws.get_all_values()
     except GSpreadException:
-        st.error(f"❌ No pude abrir '{ws_name}'. Hojas disponibles:\n  • "
-                 + "\n  • ".join(list_worksheets()))
+        st.error(
+            f"❌ No pude abrir '{ws_name}'. Hojas disponibles:\n  • "
+            + "\n  • ".join(list_worksheets())
+        )
         st.stop()
     if not values or len(values) < 2:
         st.error(f"❌ La pestaña '{ws_name}' está vacía o sin datos.")
         st.stop()
     header, rows = values[0], values[1:]
-    df = pd.DataFrame(rows, columns=header)
-    return df
+    return pd.DataFrame(rows, columns=header)
 
 def append_row(ws_name: str, row: list):
     try:
@@ -50,25 +51,30 @@ def append_row(ws_name: str, row: list):
         ws = sh.worksheet(ws_name)
         ws.append_row(row, value_input_option="USER_ENTERED")
     except GSpreadException:
-        st.error(f"❌ No pude escribir en '{ws_name}'. Hojas disponibles:\n  • "
-                 + "\n  • ".join(list_worksheets()))
+        st.error(
+            f"❌ No pude escribir en '{ws_name}'. Hojas disponibles:\n  • "
+            + "\n  • ".join(list_worksheets())
+        )
         st.stop()
 
 # ——————————————————————————————————————
 # 3) Lógica de negocio
 # ——————————————————————————————————————
 def calcular_ganancia(precio_venta, precio_costo, cantidad, incluye_iva, pago_tarjeta):
-    tv = round(precio_venta * cantidad, 4)
-    tc = round(precio_costo  * cantidad, 4)
-    sat = round(tv * 0.16, 4) if incluye_iva else 0
-    com = round(tv * 0.036 * 1.16, 4) if pago_tarjeta else 0
-    gan = round(tv - tc - sat - com, 4)
-    res = round(gan * 0.20, 4)
-    igl = 0
-    rey = round(gan * 0.05, 4)
-    pau = round(gan - res - igl - rey, 4)
-    return tv, tc, sat, com, gan, res, igl, rey, pau
+    total_venta = round(precio_venta * cantidad, 4)
+    total_costo = round(precio_costo  * cantidad, 4)
+    sat        = round(total_venta * 0.16, 4) if incluye_iva else 0
+    comision   = round(total_venta * 0.036 * 1.16, 4) if pago_tarjeta else 0
+    ganancia   = round(total_venta - total_costo - sat - comision, 4)
+    reserva    = round(ganancia * 0.20, 4)
+    iglesia    = 0
+    reyna      = round(ganancia * 0.05, 4)
+    paul       = round(ganancia - reserva - iglesia - reyna, 4)
+    return total_venta, total_costo, sat, comision, ganancia, reserva, iglesia, reyna, paul
 
+# ——————————————————————————————————————
+# 4) Registrar venta en la pestaña "Ventas"
+# ——————————————————————————————————————
 def registrar_venta(producto, presentacion, cantidad,
                     precio_venta, precio_costo, incluye_iva, pago_tarjeta):
     fecha = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -84,38 +90,38 @@ def registrar_venta(producto, presentacion, cantidad,
     st.success("✅ Venta registrada en Google Sheets")
 
 # ——————————————————————————————————————
-# 4) Páginas de la app
+# 5) Páginas de la app
 # ——————————————————————————————————————
 def page_calculadora():
     st.header("🧪 Calculadora de Ingredientes")
     linea = st.selectbox("Línea de productos", ["Roca Viva (RV)", "FZClean (FZ)"])
     ws_recetas = "Recetas RV" if linea.endswith("RV") else "Recetas FZ"
     df_rec = load_df(ws_recetas)
-    # rellenar Producto para cada ingrediente
+    # Expandir producto
     df_rec["_Product"] = df_rec["Producto"].replace("", np.nan).ffill()
     producto = st.selectbox("Producto", df_rec["_Product"].unique())
     litros = st.number_input("Litros a preparar", min_value=1.0, step=1.0, value=1.0)
     if st.button("Calcular ingredientes"):
         sel = df_rec[df_rec["_Product"] == producto].copy()
-        # usamos la cantidad base de la primera fila en 'Cantidad (L)'
-        base = float(sel["Cantidad (L)"].iloc[0])
-        factor = litros / base
+        # La receta base es para 200 litros
+        base_litros = 200.0
+        factor = litros / base_litros
         sel["Cantidad Necesaria (L)"] = sel["Cantidad (L)"].astype(float) * factor
         st.dataframe(sel[["Ingrediente", "Cantidad Necesaria (L)"]])
+
 
 def page_ventas():
     st.header("💰 Registrar Venta")
     precios_df = load_df("Precio Venta")
     costos_df  = load_df("Costos")
     producto = st.selectbox("Producto", precios_df["Producto"].unique())
-    # intersección de presentaciones
     pres = [c for c in precios_df.columns if c != "Producto" and c in costos_df.columns]
     presentacion = st.selectbox("Presentación", pres)
     cantidad = st.number_input("Cantidad", min_value=1.0, step=1.0, value=1.0)
     incluye_iva  = st.checkbox("¿Precio incluye IVA?", value=True)
     pago_tarjeta = st.checkbox("¿Pago con tarjeta?", value=False)
-    precio_venta = float(precios_df.loc[precios_df["Producto"]==producto, presentacion].iloc[0])
-    precio_costo = float(costos_df.loc[costos_df["Producto"]==producto, presentacion].iloc[0])
+    precio_venta = float(precios_df.loc[precios_df["Producto"] == producto, presentacion].iloc[0])
+    precio_costo = float(costos_df.loc[costos_df["Producto"] == producto, presentacion].iloc[0])
     st.markdown(f"**Venta:** {precio_venta}   —   **Costo:** {precio_costo}")
     if st.button("Registrar"):
         registrar_venta(producto, presentacion, cantidad,
@@ -131,7 +137,7 @@ def page_egresos():
     st.dataframe(load_df("Egresos"))
 
 # ——————————————————————————————————————
-# 5) Menú principal
+# 6) Menú principal
 # ——————————————————————————————————————
 def main():
     st.title("📊 Panel de Control – ROCA VIVA / FZClean")
@@ -149,5 +155,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
