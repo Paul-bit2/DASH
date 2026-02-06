@@ -2,135 +2,147 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from pathlib import Path
-import time
 
 # ------------------------------
-# Config UI
+# UI Config (mobile-friendly)
 # ------------------------------
-st.set_page_config(
-    page_title="Calculadora de Ingredientes",
-    page_icon="🧪",
-    layout="wide",
-)
+st.set_page_config(page_title="Calculadora RV/FZ", page_icon="🧪", layout="centered")
 
 # ------------------------------
-# Ruta robusta al Excel
+# Excel path (robusto)
 # ------------------------------
 SCRIPT_DIR = Path(__file__).resolve().parent
 EXCEL_PATH = SCRIPT_DIR / "RV.xlsx"
 if not EXCEL_PATH.exists():
-    # fallback si el archivo está en la raíz del repo
-    EXCEL_PATH = Path("RV.xlsx")
+    EXCEL_PATH = Path("RV.xlsx")  # fallback raíz repo
 
 # ------------------------------
 # Helpers
 # ------------------------------
 @st.cache_resource
-def get_excel_file(excel_path: str):
-    # Abre estructura del Excel una sola vez
+def get_excel(excel_path: str):
     return pd.ExcelFile(excel_path)
 
 @st.cache_data(show_spinner=False)
 def load_recetas(excel_path: str, sheet_name: str) -> pd.DataFrame:
-    xl = get_excel_file(excel_path)
+    xl = get_excel(excel_path)
     df = xl.parse(sheet_name)
     if df is None or df.empty:
         return pd.DataFrame()
 
-    # Limpieza básica
     df.columns = df.columns.astype(str).str.strip()
     df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
 
-    # Validar columnas mínimas
     required = {"Producto", "Ingrediente", "Cantidad (L)"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"Faltan columnas en '{sheet_name}': {', '.join(sorted(missing))}")
 
-    # Expandir producto (cuando viene en blanco en filas siguientes)
     df["_Product"] = df["Producto"].replace("", np.nan).ffill()
+    df["Cantidad (L)"] = pd.to_numeric(df["Cantidad (L)"], errors="coerce").fillna(0.0)
     return df
 
-def pretty_number(x: float) -> str:
-    try:
-        return f"{float(x):,.3f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    except Exception:
-        return str(x)
+def format_qty_l_or_ml(liters_value: float) -> str:
+    """
+    Regla:
+      - >= 1.0  -> mostrar en L
+      - <  1.0  -> mostrar en mL (ej .9 -> 900 mL)
+    """
+    v = float(liters_value)
 
-def compute_ingredientes(df_rec: pd.DataFrame, producto: str, litros: float, base_litros: float):
-    sel = df_rec[df_rec["_Product"] == producto].copy()
-    sel["Cantidad (L)"] = pd.to_numeric(sel["Cantidad (L)"], errors="coerce").fillna(0.0)
-    factor = litros / base_litros
-    sel["Cantidad Necesaria (L)"] = sel["Cantidad (L)"] * factor
-    # orden y formato
-    out = sel[["Ingrediente", "Cantidad Necesaria (L)"]].copy()
-    out = out.sort_values("Ingrediente")
-    return out, factor
+    if v < 1.0:
+        ml = v * 1000.0
+        # si es casi entero, sin decimales
+        if abs(ml - round(ml)) < 1e-9:
+            return f"{int(round(ml)):,} mL".replace(",", " ")
+        # si no, 1 decimal
+        return f"{ml:,.1f} mL".replace(",", " ").replace(".0", "")
+    else:
+        # litros: 3 decimales si hace falta, pero sin ceros inútiles
+        s = f"{v:,.3f} L".replace(",", " ")
+        s = s.replace("0 L", " L")
+        # quitar ceros al final tipo 2.500 -> 2.5
+        s = s.replace(" L", "")
+        if "." in s:
+            s = s.rstrip("0").rstrip(".")
+        return s + " L"
+
+def ingredient_cards(df_out: pd.DataFrame):
+    # Tarjetas simples usando markdown (se ven bien en celular)
+    for _, r in df_out.iterrows():
+        ing = str(r["Ingrediente"])
+        qty = float(r["Cantidad Necesaria (L)"])
+        pretty = format_qty_l_or_ml(qty)
+
+        st.markdown(
+            f"""
+            <div style="
+              border: 1px solid rgba(255,255,255,0.14);
+              border-radius: 16px;
+              padding: 12px 14px;
+              margin-bottom: 10px;
+              background: rgba(255,255,255,0.03);
+            ">
+              <div style="font-weight:800; font-size:16px; line-height:1.2;">{ing}</div>
+              <div style="margin-top:6px; font-size:20px; font-weight:900;">{pretty}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
 
 # ------------------------------
-# Header (diseño)
+# Start
 # ------------------------------
 st.markdown(
     """
-    <div style="padding: 16px 18px; border-radius: 18px; border: 1px solid rgba(255,255,255,0.12);">
-      <div style="display:flex; align-items:center; gap:10px;">
-        <div style="font-size:32px;">🧪</div>
+    <div style="padding: 12px 14px; border-radius: 18px; border: 1px solid rgba(255,255,255,0.12);">
+      <div style="display:flex; gap:10px; align-items:center;">
+        <div style="font-size:30px;">🧪</div>
         <div>
-          <div style="font-size:22px; font-weight:800; line-height:1.1;">Calculadora de Ingredientes</div>
-          <div style="opacity:0.8; font-size:14px; margin-top:4px;">
-            Lee recetas desde <b>RV.xlsx</b> y calcula cantidades para los litros que necesites.
-          </div>
+          <div style="font-size:20px; font-weight:900;">Calculadora de Ingredientes</div>
+          <div style="opacity:0.85; font-size:13px;">Cambia litros y se actualiza al momento.</div>
         </div>
       </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
-
 st.write("")
 
-# ------------------------------
-# Validar archivo
-# ------------------------------
 if not EXCEL_PATH.exists():
     st.error(
-        f"❌ No encuentro **RV.xlsx**.\n\n"
-        f"Busqué en:\n- {SCRIPT_DIR / 'RV.xlsx'}\n- {Path('RV.xlsx').resolve()}\n\n"
-        "Súbelo al repo y colócalo en el mismo folder que `Dashboard.py` (o en la raíz)."
+        "❌ No encuentro RV.xlsx.\n\n"
+        "Súbelo al repo y colócalo:\n"
+        "- en el mismo folder que Dashboard.py, o\n"
+        "- en la raíz del repo."
     )
     st.stop()
 
 # ------------------------------
-# Sidebar controls (bonito)
+# Selector "todo en el mismo espacio"
 # ------------------------------
-with st.sidebar:
-    st.markdown("## ⚙️ Configuración")
-    linea = st.radio("Línea", ["Roca Viva (RV)", "FZClean (FZ)"], horizontal=False)
-    sheet = "Recetas RV" if "RV" in linea else "Recetas FZ"
+# En celular, columns se apilan; en desktop quedan en fila.
+c1, c2 = st.columns([1, 1])
 
-    base_litros = st.number_input(
-        "Base de receta (L)",
-        min_value=1.0,
-        value=200.0,
-        step=10.0,
-        help="Tu Excel normalmente trae recetas para 200 L. Cambia si tu base es otra.",
+with c1:
+    linea = st.segmented_control(
+        "Línea",
+        options=["RV", "FZ"],
+        default="RV",
     )
 
+with c2:
     litros = st.number_input(
         "Litros a preparar",
-        min_value=1.0,
+        min_value=0.1,
+        step=0.1,
         value=200.0,
-        step=10.0,
+        format="%.1f",
+        help="Ej: 200.0"
     )
 
-    st.divider()
-    st.caption("📄 Fuente")
-    st.code(str(EXCEL_PATH), language="text")
+sheet = "Recetas RV" if linea == "RV" else "Recetas FZ"
 
-# ------------------------------
-# Cargar recetas
-# ------------------------------
-t0 = time.perf_counter()
 try:
     df_rec = load_recetas(str(EXCEL_PATH), sheet)
 except Exception as e:
@@ -138,84 +150,45 @@ except Exception as e:
     st.stop()
 
 if df_rec.empty:
-    st.warning(f"⚠️ La hoja **{sheet}** está vacía.")
+    st.warning(f"⚠️ La hoja '{sheet}' está vacía.")
     st.stop()
 
 productos = sorted(df_rec["_Product"].dropna().unique().tolist())
 
-# ------------------------------
-# Main layout
-# ------------------------------
-left, right = st.columns([1.2, 1])
-
-with left:
-    st.markdown("### 🧴 Selección de producto")
-    producto = st.selectbox("Producto", productos)
-
-    # Preview de receta base (solo del producto)
-    preview = df_rec[df_rec["_Product"] == producto][["Ingrediente", "Cantidad (L)"]].copy()
-    preview["Cantidad (L)"] = pd.to_numeric(preview["Cantidad (L)"], errors="coerce").fillna(0.0)
-
-    with st.expander("👀 Ver receta base (Excel)"):
-        st.dataframe(preview, use_container_width=True)
-
-    st.write("")
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Línea", "RV" if "RV" in linea else "FZ")
-    c2.metric("Base receta (L)", pretty_number(base_litros))
-    c3.metric("Litros objetivo (L)", pretty_number(litros))
-
-    st.write("")
-
-    btn = st.button("🧮 Calcular ingredientes", use_container_width=True)
-
-with right:
-    st.markdown("### 📌 Estado")
-    st.info(
-        "Si no aparecen productos, revisa que tu hoja tenga columnas:\n"
-        "- **Producto**\n- **Ingrediente**\n- **Cantidad (L)**\n\n"
-        "Y que el nombre de hoja sea **Recetas RV** / **Recetas FZ**."
-    )
-    st.caption(f"⏱️ Carga inicial: {time.perf_counter() - t0:.3f}s")
+producto = st.selectbox("Producto", productos)
 
 # ------------------------------
-# Resultado
+# Cálculo instantáneo
 # ------------------------------
-st.write("")
-st.markdown("---")
+base_litros = 200.0  # tu estándar
+factor = float(litros) / float(base_litros)
 
-if btn:
-    out, factor = compute_ingredientes(df_rec, producto, litros, base_litros)
+sel = df_rec[df_rec["_Product"] == producto].copy()
+sel["Cantidad Necesaria (L)"] = sel["Cantidad (L)"] * factor
+out = sel[["Ingrediente", "Cantidad Necesaria (L)"]].copy()
+out = out.sort_values("Ingrediente")
 
-    st.markdown("## ✅ Resultado")
-    r1, r2, r3, r4 = st.columns([1, 1, 1, 1])
-    r1.metric("Producto", producto)
-    r2.metric("Factor", pretty_number(factor))
-    r3.metric("Ingredientes", int(out.shape[0]))
-    r4.metric("Hoja", sheet)
+# ------------------------------
+# Resumen + salida bonita
+# ------------------------------
+st.markdown("### ✅ Resultado")
+k1, k2, k3 = st.columns(3)
+k1.metric("Línea", linea)
+k2.metric("Litros", format_qty_l_or_ml(float(litros)))
+k3.metric("Ingredientes", int(out.shape[0]))
 
-    # Formateo para mostrar bonito
-    show = out.copy()
-    show["Cantidad Necesaria (L)"] = show["Cantidad Necesaria (L)"].astype(float).round(3)
+# Tarjetas por ingrediente (mobile-first)
+ingredient_cards(out)
 
-    st.dataframe(show, use_container_width=True, height=520)
+# Opcional: descarga rápida
+csv = out.assign(
+    **{"Cantidad (texto)": out["Cantidad Necesaria (L)"].apply(format_qty_l_or_ml)}
+).to_csv(index=False).encode("utf-8-sig")
 
-    # Descarga CSV
-    csv = show.to_csv(index=False).encode("utf-8-sig")
-    st.download_button(
-        "⬇️ Descargar resultado (CSV)",
-        data=csv,
-        file_name=f"ingredientes_{('RV' if 'RV' in linea else 'FZ')}_{producto}.csv".replace(" ", "_"),
-        mime="text/csv",
-        use_container_width=True,
-    )
-else:
-    st.markdown(
-        """
-        <div style="padding: 14px 16px; border-radius: 16px; border: 1px dashed rgba(255,255,255,0.25); opacity: 0.9;">
-          <b>Tip:</b> Ajusta los litros en la barra lateral y presiona <b>Calcular</b>.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+st.download_button(
+    "⬇️ Descargar (CSV)",
+    data=csv,
+    file_name=f"ingredientes_{linea}_{producto}.csv".replace(" ", "_"),
+    mime="text/csv",
+    use_container_width=True,
+)
