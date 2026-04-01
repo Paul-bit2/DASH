@@ -29,7 +29,7 @@ def load_recetas(excel_path: str, sheet_name: str) -> pd.DataFrame:
     df = xl.parse(sheet_name)
 
     df.columns = df.columns.astype(str).str.strip()
-    df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
+    df = df.map(lambda x: x.strip() if isinstance(x, str) else x)
 
     required = {"Producto", "Ingrediente", "Cantidad (L)"}
     missing = required - set(df.columns)
